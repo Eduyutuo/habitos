@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seguimiento de Hábitos Gamificado 🕹️🔥</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Bar / Gamification Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <div class="brand-title">
+          <span class="arcade-icon">🕹️</span>
+          <div>
+            <h1>DISCIPLINA GAMIFICADA</h1>
+            <p class="subtitle">Convierte la constancia en un juego diario 🔥</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat-badge xp-badge">
+          <span class="badge-label">NIVEL</span>
+          <span class="badge-value" id="playerLevel">Nvl 5</span>
+          <span class="badge-sub" id="playerRank">Guerrero Constante</span>
+        </div>
+        <div class="stat-badge">
+          <span class="badge-label">EXP TOTAL</span>
+          <span class="badge-value" id="playerXP">1,420 XP</span>
+          <div class="mini-progress-bar">
+            <div class="mini-progress-fill" id="xpProgressBar" style="width: 65%;"></div>
+          </div>
+        </div>
+        <div class="stat-badge racha-badge">
+          <span class="badge-label">MEJOR RACHA</span>
+          <span class="badge-value" id="streakCounter">🔥 12 Días</span>
+          <span class="badge-sub">¡Imparable!</span>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" id="btnSoundToggle" title="Activar/Silenciar efectos de sonido">
+            🔊 Sonido
+          </button>
+          <button class="btn btn-primary" id="btnExportData" title="Descargar copia de seguridad">
+            💾 Guardar / Exportar
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Top Chart Section: Daily Progress Bars -->
+      <section class="section-card chart-section">
+        <div class="section-header">
+          <h2 class="section-title">PROGRESO DIARIO EN PORCENTAJE</h2>
+          <span class="meta-tag" id="currentMonthYearBadge">OCTUBRE 2026</span>
+        </div>
+        <div class="daily-bars-container" id="dailyBarsContainer">
+          <!-- Dynamic 31 bars rendered via JS -->
+        </div>
+      </section>
+
+      <!-- Main Habit Grid (Matrix) Section -->
+      <section class="section-card matrix-section">
+        <div class="matrix-controls">
+          <div class="controls-left">
+            <h2 class="section-title">MATRIZ DE HÁBITOS DIARIOS</h2>
+            <button class="btn btn-sm btn-accent" id="btnAddHabit">+ Nuevo Hábito</button>
+          </div>
+          <div class="controls-right">
+            <span class="hint-text">💡 Marca los días completados para subir de nivel y ganar XP</span>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper">
+          <table class="habit-table" id="habitTable">
+            <thead>
+              <!-- Weeks Grouping Header -->
+              <tr class="tr-weeks">
+                <th rowspan="3" class="col-sticky col-num">#</th>
+                <th rowspan="3" class="col-sticky col-habit-name">HÁBITO</th>
+                <th rowspan="3" class="col-sticky col-pct">% MES</th>
+                <th colspan="7" class="th-week week-1">SEMANA 1</th>
+                <th colspan="7" class="th-week week-2">SEMANA 2</th>
+                <th colspan="7" class="th-week week-3">SEMANA 3</th>
+                <th colspan="7" class="th-week week-4">SEMANA 4</th>
+                <th colspan="3" class="th-week week-5" id="week5HeaderTh">SEMANA 5</th>
+              </tr>
+              <!-- Days Letters Header (v, s, d, l, m, m, j) -->
+              <tr class="tr-days-letter" id="daysLetterRow">
+                <!-- Injected via JS -->
+              </tr>
+              <!-- Days Numbers Header (1, 2, 3... 31) -->
+              <tr class="tr-days-num" id="daysNumRow">
+                <!-- Injected via JS -->
+              </tr>
+            </thead>
+            <tbody id="habitTableBody">
+              <!-- Habit rows dynamically generated -->
+            </tbody>
+            <tfoot>
+              <tr class="tr-total-row" id="totalDailyDoneRow">
+                <td class="col-sticky col-num">Σ</td>
+                <td class="col-sticky col-habit-name"><strong>TOTAL COMPLETADOS</strong></td>
+                <td class="col-sticky col-pct" id="globalPctFooter">0%</td>
+                <!-- Total per day injected via JS -->
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <!-- Bottom Dashboard Grid: 2 Columns (Daily Summary + Weekly Summary + Monthly Goals) -->
+      <section class="bottom-dashboard-grid">
+        
+        <!-- Left: Resumen de Hábitos Diarios -->
+        <div class="section-card dashboard-card">
+          <div class="card-header-accent border-orange">
+            <h3>RESUMEN DE LOS HÁBITOS DIARIOS</h3>
+          </div>
+          <div class="dashboard-card-body">
+            
+            <div class="stats-gauge-row">
+              <!-- Circular Progress Gauge -->
+              <div class="gauge-container">
+                <svg viewBox="0 0 120 120" class="gauge-svg">
+                  <circle cx="60" cy="60" r="50" class="gauge-bg"></circle>
+                  <circle cx="60" cy="60" r="50" class="gauge-fill" id="dailyGaugeCircle"></circle>
+                </svg>
+                <div class="gauge-text">
+                  <span class="gauge-title">PROGRESO</span>
+                  <span class="gauge-number" id="dailyGaugeValue">0.0%</span>
+                </div>
+              </div>
+
+              <!-- Habits Counter -->
+              <div class="counter-box">
+                <span class="counter-label">HÁBITOS DIARIOS</span>
+                <span class="counter-value" id="dailyHabitsCount">0 / 0</span>
+                <span class="counter-sub">Completados este mes</span>
+              </div>
+            </div>
+
+            <!-- Metrics Table -->
+            <table class="metrics-table">
+              <thead>
+                <tr>
+                  <th>MÉTRICA</th>
+                  <th class="text-right">CANTIDAD</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>% Completado</td>
+                  <td class="text-right text-accent-green" id="metricPctCompleted">0%</td>
+                </tr>
+                <tr>
+                  <td>Completado</td>
+                  <td class="text-right text-cyan" id="metricCountCompleted">0</td>
+                </tr>
+                <tr>
+                  <td>Incompleto</td>
+                  <td class="text-right text-coral" id="metricCountIncompleted">0</td>
+                </tr>
+                <tr>
+                  <td>Objetivo diario</td>
+                  <td class="text-right" id="metricDailyTarget">100%</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Goal Note Input -->
+            <div class="goal-input-container">
+              <label for="monthlyGoalNote">Escribe tu meta aquí 📝</label>
+              <input type="text" id="monthlyGoalNote" placeholder="Ej: Superar el 85% de cumplimiento y correr 60km..." />
+            </div>
+
+            <!-- SVG Trend Area Chart -->
+            <div class="trend-chart-box">
+              <span class="trend-title">TENDENCIA DIARIA DEL MES</span>
+              <div class="trend-svg-wrapper" id="trendChartWrapper">
+                <svg id="trendSvg" viewBox="0 0 320 90" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#10b981" stop-opacity="0.6"/>
+                      <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                    </linearGradient>
+                  </defs>
+                  <path id="trendAreaPath" fill="url(#trendGrad)" d=""></path>
+                  <path id="trendLinePath" fill="none" stroke="#10b981" stroke-width="2.5" d=""></path>
+                </svg>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right: Resumen de Hábitos Semanales & Objetivos -->
+        <div class="section-card dashboard-card">
+          <div class="card-header-accent border-coral">
+            <div class="header-with-select">
+              <h3>RESUMEN DE LOS HÁBITOS SEMANALES</h3>
+              <div class="select-group">
+                <label for="weeklyFilterSelect">SELECCIONA:</label>
+                <select id="weeklyFilterSelect">
+                  <option value="ALL">TODAS</option>
+                  <option value="1">SEMANA 1</option>
+                  <option value="2">SEMANA 2</option>
+                  <option value="3">SEMANA 3</option>
+                  <option value="4">SEMANA 4</option>
+                  <option value="5">SEMANA 5</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-card-body">
+            
+            <!-- Weekly Progress Summary Bars -->
+            <div class="weekly-bars-grid" id="weeklyBarsSummary">
+              <!-- Injected dynamically: Semana 1 (50%), Semana 2 (100%), etc. -->
+            </div>
+
+            <!-- Weekly Tasks / Habits Checklist with Strikethrough -->
+            <div class="weekly-tasks-section">
+              <div class="tasks-header">
+                <h4>TAREAS SEMANALES CLAVE</h4>
+                <button class="btn btn-xs btn-outline" id="btnAddWeeklyTask">+ Añadir Tarea</button>
+              </div>
+              <ul class="weekly-task-list" id="weeklyTaskList">
+                <!-- Injected dynamically -->
+              </ul>
+            </div>
+
+            <!-- Objetivos del Mes en Curso & Notas (from frame 10) -->
+            <div class="monthly-goals-split">
+              <div class="monthly-goals-col">
+                <div class="tasks-header">
+                  <h4 class="text-coral">OBJETIVOS DEL MES</h4>
+                  <button class="btn btn-xs btn-outline" id="btnAddMonthlyGoal">+ Añadir</button>
+                </div>
+                <ul class="monthly-goals-list" id="monthlyGoalsList">
+                  <!-- Injected via JS -->
+                </ul>
+              </div>
+
+              <div class="monthly-notes-col">
+                <h4 class="text-cyan">NOTAS Y REFLEXIONES</h4>
+                <textarea id="monthlyNotesArea" placeholder="Anota tus victorias, aprendizajes y ajustes para este mes..."></textarea>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Bottom Month Navigation Tabs (Like Google Sheets / Excel in the video) -->
+    <footer class="bottom-sheet-tabs">
+      <div class="tabs-scroll-container" id="monthTabsContainer">
+        <button class="tab-btn" data-tab="INSTRUCTIONS">📘 INSTRUCCIONES</button>
+        <button class="tab-btn" data-month="6">JULIO</button>
+        <button class="tab-btn" data-month="7">AGOSTO</button>
+        <button class="tab-btn" data-month="8">SEPTIEMBRE</button>
+        <button class="tab-btn active" data-month="9">OCTUBRE</button>
+        <button class="tab-btn" data-month="10">NOVIEMBRE</button>
+        <button class="tab-btn" data-month="11">DICIEMBRE</button>
+        <button class="tab-btn" data-tab="GOALS_TRACKER">🎯 SEGUIMIENTO DE OBJETIVOS</button>
+      </div>
+      <div class="footer-extra-actions">
+        <button class="tab-btn-icon" id="btnResetData" title="Restablecer datos del mes">🔄</button>
+      </div>
+    </footer>
+
+    <!-- Dynamic Custom Modal (Replaces browser prompt/confirm/alert) -->
+    <div class="modal-overlay hidden" id="dynamicModalOverlay">
+      <div class="modal-content dynamic-modal-content" id="dynamicModalContent">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-title-icon" id="dynamicModalIcon">🕹️</span>
+            <h3 id="dynamicModalTitle">Título del Diálogo</h3>
+          </div>
+          <button class="modal-close" id="dynamicModalCloseBtn" type="button">&times;</button>
+        </div>
+        <div class="modal-body" id="dynamicModalBody">
+          <p class="modal-msg" id="dynamicModalMsg"></p>
+          
+          <!-- Input Container for Prompts -->
+          <div class="modal-input-wrap hidden" id="dynamicModalInputWrap">
+            <input type="text" id="dynamicModalInput" class="modal-text-input" spellcheck="false" autocomplete="off" />
+            <div class="modal-emoji-palette" id="dynamicModalEmojiPalette">
+              <span class="emoji-chip" data-emoji="🏋️">🏋️</span>
+              <span class="emoji-chip" data-emoji="💧">💧</span>
+              <span class="emoji-chip" data-emoji="🏃">🏃</span>
+              <span class="emoji-chip" data-emoji="📕">📕</span>
+              <span class="emoji-chip" data-emoji="⏰">⏰</span>
+              <span class="emoji-chip" data-emoji="🥑">🥑</span>
+              <span class="emoji-chip" data-emoji="🧘">🧘</span>
+              <span class="emoji-chip" data-emoji="🧠">🧠</span>
+              <span class="emoji-chip" data-emoji="💻">💻</span>
+              <span class="emoji-chip" data-emoji="🎯">🎯</span>
+              <span class="emoji-chip" data-emoji="🔥">🔥</span>
+              <span class="emoji-chip" data-emoji="💤">💤</span>
+              <span class="emoji-chip" data-emoji="🚫">🚫</span>
+              <span class="emoji-chip" data-emoji="🧹">🧹</span>
+              <span class="emoji-chip" data-emoji="🛒">🛒</span>
+              <span class="emoji-chip" data-emoji="📊">📊</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" id="dynamicModalFooter">
+          <button class="btn btn-secondary" id="dynamicModalCancelBtn" type="button">Cancelar</button>
+          <button class="btn btn-accent" id="dynamicModalConfirmBtn" type="button">Aceptar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Formats Modal -->
+    <div class="modal-overlay hidden" id="modalExport">
+      <div class="modal-content export-modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-title-icon">💾</span>
+            <h3>GUARDAR Y EXPORTAR DATOS</h3>
+          </div>
+          <button class="modal-close" id="btnCloseExport" type="button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-msg">Selecciona el formato en el que deseas guardar tu seguimiento:</p>
+          
+          <div class="export-options-list">
+            <!-- Opción 1: Excel (Recomendada) -->
+            <div class="export-card-option" id="btnExportExcel">
+              <div class="export-card-icon excel-icon">📊</div>
+              <div class="export-card-info">
+                <div class="export-card-header">
+                  <strong>Excel (.xlsx)</strong>
+                  <span class="badge-tag badge-recommended">MÁS POPULAR</span>
+                </div>
+                <p>Libro de cálculo nativo con hojas para la matriz mensual, métricas y objetivos.</p>
+              </div>
+              <button class="btn btn-sm btn-accent" type="button">Descargar</button>
+            </div>
+
+            <!-- Opción 2: CSV -->
+            <div class="export-card-option" id="btnExportCSV">
+              <div class="export-card-icon csv-icon">📄</div>
+              <div class="export-card-info">
+                <div class="export-card-header">
+                  <strong>CSV (.csv)</strong>
+                  <span class="badge-tag badge-cyan">UNIVERSAL</span>
+                </div>
+                <p>Valores separados por comas compatible con Excel, Google Sheets y LibreOffice.</p>
+              </div>
+              <button class="btn btn-sm btn-primary" type="button">Descargar</button>
+            </div>
+
+            <!-- Opción 3: JSON -->
+            <div class="export-card-option" id="btnExportJSON">
+              <div class="export-card-icon json-icon">⚙️</div>
+              <div class="export-card-info">
+                <div class="export-card-header">
+                  <strong>JSON (.json)</strong>
+                  <span class="badge-tag badge-subtle">RESPALDO COMPLETO</span>
+                </div>
+                <p>Copia de seguridad técnica con todo el estado para restaurar o transferir.</p>
+              </div>
+              <button class="btn btn-sm btn-secondary" type="button">Descargar</button>
+            </div>
+          </div>
+
+          <!-- Zona de Importación -->
+          <div class="import-section-box">
+            <span class="import-title">¿Deseas restaurar una copia previa?</span>
+            <label class="btn btn-xs btn-outline import-label" for="importJsonFileInput">
+              📥 Importar Archivo (.json)
+            </label>
+            <input type="file" id="importJsonFileInput" accept=".json" style="display: none;" />
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Instructions Modal -->
+    <div class="modal-overlay hidden" id="modalInstructions">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>📘 CÓMO FUNCIONA EL SISTEMA GAMIFICADO</h3>
+          <button class="modal-close" id="btnCloseInstructions">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p><strong>¡Convierte la disciplina en un juego divertido! 🕹️🔥</strong></p>
+          <ul>
+            <li><strong>Matriz de Hábitos:</strong> Cada fila representa un hábito diario. Marca la casilla al cumplirlo durante el día.</li>
+            <li><strong>Colores por Semana:</strong> Semana 1 (Verde), Semana 2 (Coral), Semana 3 (Cian), Semana 4 (Lavanda), Semana 5 (Ámbar).</li>
+            <li><strong>Puntos de Experiencia (XP):</strong> Cada hábito completado te otorga <strong>+10 XP</strong>. Al completar el 100% de un día ganas un <strong>bonus de +50 XP</strong>.</li>
+            <li><strong>Gráfico Diario:</strong> Las barras superiores reflejan tu rendimiento de 0% a 100% para cada día.</li>
+            <li><strong>Persistencia:</strong> Tus datos se guardan automáticamente en tu navegador. Puedes exportar un respaldo en cualquier momento con el botón "Guardar / Exportar".</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Confetti Canvas for Level Up & 100% Day -->
+  <canvas id="confettiCanvas" class="confetti-canvas"></canvas>
+
+  <!-- Biblioteca local para generación estética de Excel (.xlsx) con estilos y colores -->
+  <script src="exceljs.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
