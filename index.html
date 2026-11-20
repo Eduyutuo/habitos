@@ -63,7 +63,11 @@
       <section class="section-card chart-section">
         <div class="section-header">
           <h2 class="section-title">PROGRESO DIARIO EN PORCENTAJE</h2>
-          <span class="meta-tag" id="currentMonthYearBadge">OCTUBRE 2026</span>
+          <div class="month-year-control-group">
+            <button class="btn-year-nav" id="btnPrevYear" title="Año anterior">‹</button>
+            <span class="meta-tag meta-tag-clickable" id="currentMonthYearBadge" title="Clic para cambiar de año">OCTUBRE 2026 ✏️</span>
+            <button class="btn-year-nav" id="btnNextYear" title="Año siguiente">›</button>
+          </div>
         </div>
         <div class="daily-bars-container" id="dailyBarsContainer">
           <!-- Dynamic 31 bars rendered via JS -->
@@ -270,16 +274,11 @@
     <!-- Bottom Month Navigation Tabs (Like Google Sheets / Excel in the video) -->
     <footer class="bottom-sheet-tabs">
       <div class="tabs-scroll-container" id="monthTabsContainer">
-        <button class="tab-btn" data-tab="INSTRUCTIONS">📘 INSTRUCCIONES</button>
-        <button class="tab-btn" data-month="6">JULIO</button>
-        <button class="tab-btn" data-month="7">AGOSTO</button>
-        <button class="tab-btn" data-month="8">SEPTIEMBRE</button>
-        <button class="tab-btn active" data-month="9">OCTUBRE</button>
-        <button class="tab-btn" data-month="10">NOVIEMBRE</button>
-        <button class="tab-btn" data-month="11">DICIEMBRE</button>
-        <button class="tab-btn" data-tab="GOALS_TRACKER">🎯 SEGUIMIENTO DE OBJETIVOS</button>
+        <!-- Pestañas generadas dinámicamente con JavaScript -->
       </div>
       <div class="footer-extra-actions">
+        <button class="tab-btn-action" id="btnAddMonthBtn" title="Agregar nuevo mes a este año">➕ Mes</button>
+        <button class="tab-btn-action" id="btnManageMonthsBtn" title="Administrar meses (Editar / Eliminar)">⚙️ Meses</button>
         <button class="tab-btn-icon" id="btnResetData" title="Restablecer datos del mes">🔄</button>
       </div>
     </footer>
@@ -390,6 +389,30 @@
             <input type="file" id="universalFileInput" accept=".xlsx, .xls, .csv, .json" style="display: none;" />
           </div>
 
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Administrar Meses (Agregar, Editar, Eliminar con verificación de datos) -->
+    <div class="modal-overlay hidden" id="modalManageMonths">
+      <div class="modal-content manage-months-modal">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-title-icon">📅</span>
+            <h3>ADMINISTRAR MESES (<span id="modalManageYearDisplay">2026</span>)</h3>
+          </div>
+          <button class="modal-close" id="btnCloseManageMonths" type="button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-msg">Gestiona los meses activos para este año. El sistema valida si un mes contiene datos antes de borrarlo.</p>
+          
+          <div class="manage-months-list" id="manageMonthsList">
+            <!-- Inyectado dinámicamente con JS -->
+          </div>
+
+          <div class="manage-months-footer-action">
+            <button class="btn btn-accent btn-sm" id="btnOpenAddMonthFromModal" type="button">➕ Agregar Nuevo Mes</button>
+          </div>
         </div>
       </div>
     </div>

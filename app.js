@@ -6,26 +6,25 @@
 (function () {
   'use strict';
 
-  // Configuración de Meses y Días
-  const MONTHS_CONFIG = [
-    { name: 'JULIO', days: 31, startDayLetter: 'l' },
-    { name: 'AGOSTO', days: 31, startDayLetter: 'v' },
-    { name: 'SEPTIEMBRE', days: 30, startDayLetter: 'l' },
-    { name: 'OCTUBRE', days: 31, startDayLetter: 'v' },
-    { name: 'NOVIEMBRE', days: 30, startDayLetter: 'd' },
-    { name: 'DICIEMBRE', days: 31, startDayLetter: 'm' },
+  // Configuración de Meses por Defecto
+  const DEFAULT_MONTHS = [
+    { id: 'm_jul', name: 'JULIO', days: 31 },
+    { id: 'm_ago', name: 'AGOSTO', days: 31 },
+    { id: 'm_sep', name: 'SEPTIEMBRE', days: 30 },
+    { id: 'm_oct', name: 'OCTUBRE', days: 31 },
+    { id: 'm_nov', name: 'NOVIEMBRE', days: 30 },
+    { id: 'm_dic', name: 'DICIEMBRE', days: 31 },
   ];
 
   const DAY_LETTERS_CYCLE = ['v', 's', 'd', 'l', 'm', 'm', 'j'];
 
-  // Hábitos por defecto extraídos directamente del video (Fotograma 9)
+  // Hábitos por defecto (Actualizado: sin 'No mas Fap')
   const DEFAULT_HABITS = [
     'Entrenar en el Gym 🏋️',
     'Tomar agua 💧',
     'No usar redes sociales ❌',
     'Correr mas de 5 km 🏃',
     'Leer 10 Paginas Diarias 📕',
-    'No mas Fap 🚫',
     'Agradecer a dios 🙏',
     'Dormir 8:30 PM ⏱️',
     'Contabilizar mis macros 🥑',
@@ -47,7 +46,7 @@
   ];
 
   // Estado Central de la Aplicación
-  let currentMonthIndex = 3; // Octubre por defecto (índice 3 en MONTHS_CONFIG)
+  let currentMonthIndex = 3; // Octubre por defecto
   let appState = loadState() || getInitialState();
   let soundEnabled = true;
 
@@ -99,11 +98,9 @@
   // Carga y Guardado en LocalStorage
   function getInitialState() {
     const monthsData = {};
-    MONTHS_CONFIG.forEach((m, idx) => {
-      // Matriz de hábitos: { habitId: [bool_dia1, bool_dia2, ...] }
+    DEFAULT_MONTHS.forEach((m, idx) => {
       const matrix = {};
       DEFAULT_HABITS.forEach((h, hIdx) => {
-        // Marcado inicial representativo similar al video
         const checks = new Array(m.days).fill(false);
         if (idx === 3) { // Octubre
           for (let d = 0; d < 14; d++) {
@@ -113,7 +110,8 @@
         matrix[`habit_${hIdx}`] = checks;
       });
 
-      monthsData[m.name] = {
+      const key = `${m.name}_2026`;
+      monthsData[key] = {
         habits: [...DEFAULT_HABITS],
         matrix: matrix,
         goalNote: idx === 3 ? 'Completar el 85% de los hábitos y correr 60km en total' : '',
@@ -124,6 +122,8 @@
     });
 
     return {
+      currentYear: 2026,
+      monthsList: JSON.parse(JSON.stringify(DEFAULT_MONTHS)),
       months: monthsData,
       soundEnabled: true,
       lastActiveMonth: 'OCTUBRE'
@@ -141,29 +141,109 @@
   function loadState() {
     try {
       const data = localStorage.getItem('DISCIPLINA_GAMIFICADA_DATA');
-      return data ? JSON.parse(data) : null;
+      if (!data) return null;
+      const state = JSON.parse(data);
+
+      state.currentYear = state.currentYear || 2026;
+      if (!state.monthsList || state.monthsList.length === 0) {
+        state.monthsList = JSON.parse(JSON.stringify(DEFAULT_MONTHS));
+      }
+
+      // Migrar claves antiguas ('OCTUBRE' -> 'OCTUBRE_2026')
+      state.months = state.months || {};
+      const keys = Object.keys(state.months);
+      keys.forEach(k => {
+        if (!k.includes('_')) {
+          const newKey = `${k}_${state.currentYear}`;
+          if (!state.months[newKey]) {
+            state.months[newKey] = state.months[k];
+          }
+        }
+      });
+
+      // Sanitizar: Eliminar completamente 'No mas Fap' de cualquier dato almacenado
+      Object.keys(state.months).forEach(k => {
+        const mData = state.months[k];
+        if (mData && mData.habits) {
+          const fapIdx = mData.habits.findIndex(h => h.toLowerCase().includes('fap'));
+          if (fapIdx !== -1) {
+            mData.habits.splice(fapIdx, 1);
+            if (mData.matrix) {
+              const newMatrix = {};
+              mData.habits.forEach((_, idx) => {
+                const oldKey = `habit_${idx >= fapIdx ? idx + 1 : idx}`;
+                newMatrix[`habit_${idx}`] = mData.matrix[oldKey] || [];
+              });
+              mData.matrix = newMatrix;
+            }
+          }
+        }
+      });
+
+      return state;
     } catch (e) {
+      console.error('Error cargando estado:', e);
       return null;
     }
   }
 
-  function getCurrentMonthData() {
-    const monthName = MONTHS_CONFIG[currentMonthIndex].name;
-    if (!appState.months[monthName]) {
-      const days = MONTHS_CONFIG[currentMonthIndex].days;
-      appState.months[monthName] = {
-        habits: [...DEFAULT_HABITS],
-        matrix: {},
-        goalNote: '',
-        weeklyTasks: JSON.parse(JSON.stringify(DEFAULT_WEEKLY_TASKS)),
-        monthlyGoals: JSON.parse(JSON.stringify(DEFAULT_MONTHLY_GOALS)),
-        notes: ''
-      };
-      DEFAULT_HABITS.forEach((_, i) => {
-        appState.months[monthName].matrix[`habit_${i}`] = new Array(days).fill(false);
-      });
+  function getCurrentMonthConfig() {
+    if (!appState.monthsList || appState.monthsList.length === 0) {
+      appState.monthsList = JSON.parse(JSON.stringify(DEFAULT_MONTHS));
     }
-    return appState.months[monthName];
+    if (currentMonthIndex >= appState.monthsList.length) {
+      currentMonthIndex = Math.max(0, appState.monthsList.length - 1);
+    }
+    return appState.monthsList[currentMonthIndex];
+  }
+
+  function getCurrentMonthData() {
+    const monthConfig = getCurrentMonthConfig();
+    const year = appState.currentYear || 2026;
+    const key = `${monthConfig.name}_${year}`;
+
+    if (!appState.months[key]) {
+      // Si existía sin año, reutilizarlo
+      if (appState.months[monthConfig.name]) {
+        appState.months[key] = appState.months[monthConfig.name];
+      } else {
+        const matrix = {};
+        DEFAULT_HABITS.forEach((_, i) => {
+          matrix[`habit_${i}`] = new Array(monthConfig.days).fill(false);
+        });
+        appState.months[key] = {
+          habits: [...DEFAULT_HABITS],
+          matrix: matrix,
+          goalNote: '',
+          weeklyTasks: JSON.parse(JSON.stringify(DEFAULT_WEEKLY_TASKS)),
+          monthlyGoals: JSON.parse(JSON.stringify(DEFAULT_MONTHLY_GOALS)),
+          notes: ''
+        };
+      }
+    }
+    return appState.months[key];
+  }
+
+  // Verifica si un mes contiene datos reales (checks marcados, notas o tareas)
+  function hasMonthData(monthName, year = appState.currentYear) {
+    const key = `${monthName}_${year}`;
+    const mData = appState.months[key] || appState.months[monthName];
+    if (!mData) return { hasData: false, count: 0 };
+
+    let totalChecked = 0;
+    Object.keys(mData.matrix || {}).forEach(k => {
+      const arr = mData.matrix[k] || [];
+      totalChecked += arr.filter(Boolean).length;
+    });
+
+    const hasNotes = !!(mData.notes && mData.notes.trim() !== '');
+    const hasGoals = (mData.monthlyGoals || []).some(g => g.done);
+    const hasWeekly = (mData.weeklyTasks || []).some(w => w.done);
+
+    return {
+      hasData: totalChecked > 0 || hasNotes || hasGoals || hasWeekly,
+      count: totalChecked
+    };
   }
 
   // Helper para asignar la clase de semana según el número de día (1-31)
@@ -180,12 +260,12 @@
   // =========================================================================
 
   function renderAll() {
-    const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+    const monthConfig = getCurrentMonthConfig();
     const monthData = getCurrentMonthData();
 
-    // Actualizar Título de Mes
+    // Actualizar Título de Mes y Año
     const monthBadge = document.getElementById('currentMonthYearBadge');
-    if (monthBadge) monthBadge.textContent = `${monthConfig.name} 2026`;
+    if (monthBadge) monthBadge.textContent = `${monthConfig.name} ${appState.currentYear || 2026} ✏️`;
 
     renderMatrixHeaders(monthConfig);
     renderHabitRows(monthConfig, monthData);
@@ -368,7 +448,7 @@
   // =========================================================================
 
   function updateCalculationsAndUI() {
-    const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+    const monthConfig = getCurrentMonthConfig();
     const monthData = getCurrentMonthData();
     const totalHabits = monthData.habits.length;
     const totalDays = monthConfig.days;
@@ -751,24 +831,266 @@
   }
 
   // =========================================================================
-  // NAVEGACIÓN POR PESTAÑAS (Estilo Hojas de Cálculo del video)
+  // GESTIÓN DINÁMICA DE MESES Y AÑOS
   // =========================================================================
 
-  function updateMonthTabs() {
-    const tabButtons = document.querySelectorAll('.bottom-sheet-tabs .tab-btn');
-    const currentName = MONTHS_CONFIG[currentMonthIndex].name;
+  function changeYear(delta) {
+    appState.currentYear = (appState.currentYear || 2026) + delta;
+    saveState();
+    renderAll();
+    playArcadeCheckSound();
+  }
 
-    tabButtons.forEach(btn => {
-      if (btn.dataset.month) {
-        const monthNum = parseInt(btn.dataset.month, 10);
-        const config = MONTHS_CONFIG.find(m => m.name === btn.textContent.trim());
-        if (btn.textContent.trim() === currentName) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      }
+  async function promptChangeYear() {
+    const yearPrompt = await showCustomPrompt({
+      title: 'Cambiar Año de Seguimiento',
+      icon: '📆',
+      message: 'Ingresa el año en el que deseas registrar tus hábitos:',
+      defaultValue: (appState.currentYear || 2026).toString(),
+      placeholder: '2026',
+      showEmojis: false
     });
+
+    if (yearPrompt && yearPrompt.trim() !== '') {
+      const parsedYear = parseInt(yearPrompt.trim(), 10);
+      if (!isNaN(parsedYear) && parsedYear >= 2000 && parsedYear <= 2100) {
+        appState.currentYear = parsedYear;
+        saveState();
+        renderAll();
+        playLevelUpFanfare();
+      }
+    }
+  }
+
+  async function addNewMonth() {
+    const monthName = await showCustomPrompt({
+      title: 'Agregar Nuevo Mes',
+      icon: '➕',
+      message: 'Escribe el nombre del nuevo mes a agregar a tu lista (ej: ENERO, FEBRERO, MARZO...):',
+      defaultValue: '',
+      placeholder: 'Nombre del mes',
+      showEmojis: false
+    });
+
+    if (!monthName || monthName.trim() === '') return;
+    const formattedName = monthName.trim().toUpperCase();
+
+    if (appState.monthsList.some(m => m.name === formattedName)) {
+      await showCustomAlert({
+        title: 'Mes ya existente',
+        icon: '⚠️',
+        message: `El mes <strong>${formattedName}</strong> ya se encuentra en tu lista para el año ${appState.currentYear || 2026}.`,
+        buttonText: 'Aceptar'
+      });
+      return;
+    }
+
+    const daysPrompt = await showCustomPrompt({
+      title: `Días para ${formattedName}`,
+      icon: '📅',
+      message: 'Número de días en este mes (28, 29, 30 o 31):',
+      defaultValue: '31',
+      placeholder: '31',
+      showEmojis: false
+    });
+
+    let days = parseInt(daysPrompt, 10);
+    if (isNaN(days) || days < 28 || days > 31) days = 30;
+
+    appState.monthsList.push({
+      id: 'm_' + Date.now(),
+      name: formattedName,
+      days: days
+    });
+
+    currentMonthIndex = appState.monthsList.length - 1;
+    saveState();
+    renderAll();
+    renderManageMonthsModalList();
+    playLevelUpFanfare();
+    launchConfetti();
+  }
+
+  async function editMonth(monthIdx) {
+    const monthConfig = appState.monthsList[monthIdx];
+    if (!monthConfig) return;
+
+    const newName = await showCustomPrompt({
+      title: `Editar Mes (${monthConfig.name})`,
+      icon: '✏️',
+      message: 'Modifica el nombre del mes:',
+      defaultValue: monthConfig.name,
+      placeholder: 'Nombre del mes',
+      showEmojis: false
+    });
+
+    if (!newName || newName.trim() === '') return;
+    const formattedName = newName.trim().toUpperCase();
+
+    const daysPrompt = await showCustomPrompt({
+      title: `Días para ${formattedName}`,
+      icon: '📅',
+      message: 'Número de días en este mes (28, 29, 30 o 31):',
+      defaultValue: monthConfig.days.toString(),
+      placeholder: '31',
+      showEmojis: false
+    });
+
+    let newDays = parseInt(daysPrompt, 10);
+    if (isNaN(newDays) || newDays < 28 || newDays > 31) newDays = monthConfig.days;
+
+    const year = appState.currentYear || 2026;
+    const oldKey = `${monthConfig.name}_${year}`;
+    const newKey = `${formattedName}_${year}`;
+
+    if (oldKey !== newKey && appState.months[oldKey]) {
+      appState.months[newKey] = appState.months[oldKey];
+      delete appState.months[oldKey];
+    }
+
+    monthConfig.name = formattedName;
+    monthConfig.days = newDays;
+
+    saveState();
+    renderAll();
+    renderManageMonthsModalList();
+    playArcadeCheckSound();
+  }
+
+  async function deleteMonth(monthIdx) {
+    if (appState.monthsList.length <= 1) {
+      await showCustomAlert({
+        title: 'Acción no permitida',
+        icon: '⚠️',
+        message: 'Debes mantener al menos un mes activo en la lista.',
+        buttonText: 'Entendido'
+      });
+      return;
+    }
+
+    const monthConfig = appState.monthsList[monthIdx];
+    const year = appState.currentYear || 2026;
+    const dataCheck = hasMonthData(monthConfig.name, year);
+
+    let confirmed = false;
+    if (dataCheck.hasData) {
+      confirmed = await showCustomConfirm({
+        title: `⚠️ ¿Eliminar ${monthConfig.name}?`,
+        icon: '🗑️',
+        message: `El mes <strong>${monthConfig.name} (${year})</strong> contiene <strong>${dataCheck.count} casillas completadas</strong> y notas guardadas.<br><br><span style="color: #f87171; font-weight: bold;">Si lo eliminas, perderás definitivamente todos los datos de este mes.</span><br><br>¿Confirmas que deseas eliminarlo?`,
+        confirmText: 'Sí, Eliminar con Datos',
+        cancelText: 'Cancelar',
+        isDanger: true
+      });
+    } else {
+      confirmed = await showCustomConfirm({
+        title: `¿Eliminar ${monthConfig.name}?`,
+        icon: '🗑️',
+        message: `El mes <strong>${monthConfig.name} (${year})</strong> está vacío (no tiene casillas marcadas). ¿Deseas quitarlo de la lista?`,
+        confirmText: 'Eliminar Mes',
+        cancelText: 'Cancelar',
+        isDanger: false
+      });
+    }
+
+    if (confirmed) {
+      const key = `${monthConfig.name}_${year}`;
+      delete appState.months[key];
+      delete appState.months[monthConfig.name];
+      appState.monthsList.splice(monthIdx, 1);
+
+      if (currentMonthIndex >= appState.monthsList.length) {
+        currentMonthIndex = Math.max(0, appState.monthsList.length - 1);
+      }
+      saveState();
+      renderAll();
+      renderManageMonthsModalList();
+      playArcadeCheckSound();
+    }
+  }
+
+  function renderManageMonthsModalList() {
+    const list = document.getElementById('manageMonthsList');
+    const yearDisplay = document.getElementById('modalManageYearDisplay');
+    if (!list) return;
+
+    if (yearDisplay) yearDisplay.textContent = appState.currentYear || 2026;
+    list.innerHTML = '';
+
+    appState.monthsList.forEach((m, idx) => {
+      const dataCheck = hasMonthData(m.name, appState.currentYear);
+      const isCurrent = idx === currentMonthIndex;
+
+      const card = document.createElement('div');
+      card.className = 'manage-month-card';
+      card.innerHTML = `
+        <div class="manage-month-info">
+          <span class="manage-month-name">${escapeHtml(m.name)} ${isCurrent ? '⭐ (Activo)' : ''}</span>
+          <span class="manage-month-days-badge">${m.days} días</span>
+          <span class="month-data-status ${dataCheck.hasData ? 'status-has-data' : 'status-empty'}">
+            ${dataCheck.hasData ? `● Con datos (${dataCheck.count} marcas)` : '○ Sin datos (Vacío)'}
+          </span>
+        </div>
+        <div class="manage-month-buttons">
+          <button class="btn btn-xs btn-outline btn-edit-m" type="button">✏️ Editar</button>
+          <button class="btn btn-xs ${dataCheck.hasData ? 'btn-danger' : 'btn-outline'} btn-del-m" type="button">🗑️ Eliminar</button>
+        </div>
+      `;
+
+      card.querySelector('.btn-edit-m').addEventListener('click', () => editMonth(idx));
+      card.querySelector('.btn-del-m').addEventListener('click', () => deleteMonth(idx));
+
+      list.appendChild(card);
+    });
+  }
+
+  function updateMonthTabs() {
+    const container = document.getElementById('monthTabsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // 1. Botón Instrucciones
+    const btnInst = document.createElement('button');
+    btnInst.className = 'tab-btn';
+    btnInst.dataset.tab = 'INSTRUCTIONS';
+    btnInst.textContent = '📘 INSTRUCCIONES';
+    btnInst.addEventListener('click', () => {
+      const modal = document.getElementById('modalInstructions');
+      if (modal) modal.classList.remove('hidden');
+    });
+    container.appendChild(btnInst);
+
+    // 2. Meses Dinámicos
+    const currentName = getCurrentMonthConfig()?.name;
+    appState.monthsList.forEach((m, idx) => {
+      const btn = document.createElement('button');
+      btn.className = `tab-btn ${m.name === currentName ? 'active' : ''}`;
+      btn.textContent = m.name;
+      btn.title = `${m.name} ${appState.currentYear || 2026} (${m.days} días)`;
+      btn.addEventListener('click', () => {
+        currentMonthIndex = idx;
+        renderAll();
+      });
+      container.appendChild(btn);
+    });
+
+    // 3. Botón Seguimiento de Objetivos
+    const btnGoals = document.createElement('button');
+    btnGoals.className = 'tab-btn';
+    btnGoals.dataset.tab = 'GOALS_TRACKER';
+    btnGoals.textContent = '🎯 SEGUIMIENTO DE OBJETIVOS';
+    btnGoals.addEventListener('click', async () => {
+      await showCustomAlert({
+        title: 'SEGUIMIENTO DE OBJETIVOS',
+        icon: '🎯',
+        message: `Para maximizar tus resultados en el año <strong>${appState.currentYear || 2026}</strong>:<br><br>
+          • <strong>Enfócate en la consistencia:</strong> Mantén el porcentaje global del mes por encima del <strong>80%</strong>.<br>
+          • <strong>Gana bonus XP:</strong> Completa el 100% de tus hábitos en los días clave para avanzar de rango.<br>
+          • <strong>Revisa tus metas:</strong> Mantén al día tus 3 objetivos mensuales en el panel inferior derecho.`,
+        buttonText: '¡A por ello!'
+      });
+    });
+    container.appendChild(btnGoals);
   }
 
   // =========================================================================
@@ -948,8 +1270,9 @@
   // =========================================================================
 
   async function exportToExcel() {
-    const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+    const monthConfig = getCurrentMonthConfig();
     const monthData = getCurrentMonthData();
+    const year = appState.currentYear || 2026;
 
     if (typeof ExcelJS === 'undefined') {
       alert('La biblioteca de Excel no está disponible. Usando CSV como alternativa.');
@@ -1007,7 +1330,7 @@
     const lastColLetter = ws.getColumn(3 + totalDays).letter;
     ws.mergeCells(`A1:${lastColLetter}1`);
     const banner = ws.getCell('A1');
-    banner.value = `DISCIPLINA GAMIFICADA — SEGUIMIENTO DE HÁBITOS 🕹️🔥 (${monthConfig.name} 2026)`;
+    banner.value = `DISCIPLINA GAMIFICADA — SEGUIMIENTO DE HÁBITOS 🕹️🔥 (${monthConfig.name} ${year})`;
     banner.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     banner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
     banner.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1308,7 +1631,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Seguimiento_Habitos_${monthConfig.name}_2026.xlsx`;
+    a.download = `Seguimiento_Habitos_${monthConfig.name}_${year}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1317,8 +1640,9 @@
   }
 
   function exportToCSV() {
-    const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+    const monthConfig = getCurrentMonthConfig();
     const monthData = getCurrentMonthData();
+    const year = appState.currentYear || 2026;
 
     // UTF-8 BOM (\uFEFF) para compatibilidad absoluta con Microsoft Excel en español
     let csv = '\uFEFF';
@@ -1363,7 +1687,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Seguimiento_Habitos_${monthConfig.name}_2026.csv`;
+    a.download = `Seguimiento_Habitos_${monthConfig.name}_${year}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1375,7 +1699,7 @@
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(appState, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `Seguimiento_Habitos_Backup_2026.json`);
+    downloadAnchor.setAttribute('download', `Seguimiento_Habitos_Backup_${appState.currentYear || 2026}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -1438,20 +1762,20 @@
           const wb = XLSX.read(data, { type: 'array', codepage: 65001 });
 
           // Detectar a qué mes pertenece (por nombre de hoja o nombre de archivo)
-          let targetMonthName = MONTHS_CONFIG[currentMonthIndex].name;
-          for (const m of MONTHS_CONFIG) {
+          let targetMonthName = getCurrentMonthConfig().name;
+          for (const m of appState.monthsList) {
             if (wb.SheetNames.some(s => s.toUpperCase().includes(m.name)) || file.name.toUpperCase().includes(m.name)) {
               targetMonthName = m.name;
               break;
             }
           }
 
-          const foundMonthIdx = MONTHS_CONFIG.findIndex(m => m.name === targetMonthName);
+          const foundMonthIdx = appState.monthsList.findIndex(m => m.name === targetMonthName);
           if (foundMonthIdx !== -1) {
             currentMonthIndex = foundMonthIdx;
           }
 
-          const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+          const monthConfig = getCurrentMonthConfig();
           const monthData = getCurrentMonthData();
           const targetDays = monthConfig.days;
 
@@ -1657,7 +1981,7 @@
         });
         if (name && name.trim() !== '') {
           const monthData = getCurrentMonthData();
-          const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+          const monthConfig = getCurrentMonthConfig();
           const newIdx = monthData.habits.length;
           monthData.habits.push(name.trim());
           monthData.matrix[`habit_${newIdx}`] = new Array(monthConfig.days).fill(false);
@@ -1808,18 +2132,19 @@
     const btnReset = document.getElementById('btnResetData');
     if (btnReset) {
       btnReset.addEventListener('click', async () => {
-        const monthName = MONTHS_CONFIG[currentMonthIndex].name;
+        const monthConfig = getCurrentMonthConfig();
+        const monthName = monthConfig.name;
         const confirmed = await showCustomConfirm({
           title: `¿Reiniciar ${monthName}?`,
           icon: '🔄',
-          message: `¿Deseas desmarcar todas las casillas de hábitos correspondientes a <strong>${monthName}</strong>?<br><span style="color: #94a3b8; font-size: 0.8rem;">Los nombres de hábitos se conservarán, pero las marcas volverán a cero.</span>`,
+          message: `¿Deseas desmarcar todas las casillas de hábitos correspondientes a <strong>${monthName} ${appState.currentYear || 2026}</strong>?<br><span style="color: #94a3b8; font-size: 0.8rem;">Los nombres de hábitos se conservarán, pero las marcas volverán a cero.</span>`,
           confirmText: 'Sí, Reiniciar Mes',
           cancelText: 'Cancelar',
           isDanger: true
         });
         if (confirmed) {
           const monthData = getCurrentMonthData();
-          const days = MONTHS_CONFIG[currentMonthIndex].days;
+          const days = monthConfig.days;
           monthData.habits.forEach((_, idx) => {
             monthData.matrix[`habit_${idx}`] = new Array(days).fill(false);
           });
@@ -1829,40 +2154,59 @@
       });
     }
 
-    // 8. Pestañas de Navegación por Meses
-    const tabButtons = document.querySelectorAll('.bottom-sheet-tabs .tab-btn');
-    tabButtons.forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const tabType = btn.dataset.tab;
-        if (tabType === 'INSTRUCTIONS') {
-          const modal = document.getElementById('modalInstructions');
-          if (modal) modal.classList.remove('hidden');
-          return;
-        }
+    // 8. Control y Navegación de Año
+    const btnPrevYear = document.getElementById('btnPrevYear');
+    if (btnPrevYear) {
+      btnPrevYear.addEventListener('click', () => changeYear(-1));
+    }
+    const btnNextYear = document.getElementById('btnNextYear');
+    if (btnNextYear) {
+      btnNextYear.addEventListener('click', () => changeYear(1));
+    }
+    const currentMonthYearBadge = document.getElementById('currentMonthYearBadge');
+    if (currentMonthYearBadge) {
+      currentMonthYearBadge.addEventListener('click', () => promptChangeYear());
+    }
 
-        if (tabType === 'GOALS_TRACKER') {
-          await showCustomAlert({
-            title: 'SEGUIMIENTO DE OBJETIVOS',
-            icon: '🎯',
-            message: `Para maximizar tus resultados:<br><br>
-              • <strong>Enfócate en la consistencia:</strong> Mantén el porcentaje global del mes por encima del <strong>80%</strong>.<br>
-              • <strong>Gana bonus XP:</strong> Completa el 100% de tus hábitos en los días clave para avanzar de rango.<br>
-              • <strong>Revisa tus metas:</strong> Mantén al día tus 3 objetivos mensuales en el panel inferior derecho.`,
-            buttonText: '¡A por ello!'
-          });
-          return;
-        }
+    // 9. Gestión Dinámica de Meses (Modal y Acciones)
+    const btnAddMonthBtn = document.getElementById('btnAddMonthBtn');
+    if (btnAddMonthBtn) {
+      btnAddMonthBtn.addEventListener('click', () => addNewMonth());
+    }
 
-        const monthName = btn.textContent.trim();
-        const foundIdx = MONTHS_CONFIG.findIndex(m => m.name === monthName);
-        if (foundIdx !== -1) {
-          currentMonthIndex = foundIdx;
-          renderAll();
+    const btnManageMonthsBtn = document.getElementById('btnManageMonthsBtn');
+    const modalManageMonths = document.getElementById('modalManageMonths');
+    const btnCloseManageMonths = document.getElementById('btnCloseManageMonths');
+    const btnOpenAddMonthFromModal = document.getElementById('btnOpenAddMonthFromModal');
+
+    if (btnManageMonthsBtn && modalManageMonths) {
+      btnManageMonthsBtn.addEventListener('click', () => {
+        renderManageMonthsModalList();
+        modalManageMonths.classList.remove('hidden');
+      });
+    }
+
+    if (btnCloseManageMonths && modalManageMonths) {
+      btnCloseManageMonths.addEventListener('click', () => {
+        modalManageMonths.classList.add('hidden');
+      });
+    }
+
+    if (modalManageMonths) {
+      modalManageMonths.addEventListener('click', (e) => {
+        if (e.target === modalManageMonths) {
+          modalManageMonths.classList.add('hidden');
         }
       });
-    });
+    }
 
-    // 9. Cerrar Modal Instrucciones
+    if (btnOpenAddMonthFromModal) {
+      btnOpenAddMonthFromModal.addEventListener('click', () => {
+        addNewMonth();
+      });
+    }
+
+    // 10. Cerrar Modal Instrucciones
     const btnCloseInst = document.getElementById('btnCloseInstructions');
     const modalInst = document.getElementById('modalInstructions');
     if (btnCloseInst && modalInst) {
