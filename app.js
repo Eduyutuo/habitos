@@ -224,11 +224,11 @@
     return appState.months[key];
   }
 
-  // Verifica si un mes contiene datos reales (checks marcados, notas o tareas)
+  // Verifica si un mes contiene datos reales (checks marcados o notas guardadas)
   function hasMonthData(monthName, year = appState.currentYear) {
     const key = `${monthName}_${year}`;
     const mData = appState.months[key] || appState.months[monthName];
-    if (!mData) return { hasData: false, count: 0 };
+    if (!mData) return { hasData: false, count: 0, hasNotes: false };
 
     let totalChecked = 0;
     Object.keys(mData.matrix || {}).forEach(k => {
@@ -236,13 +236,12 @@
       totalChecked += arr.filter(Boolean).length;
     });
 
-    const hasNotes = !!(mData.notes && mData.notes.trim() !== '');
-    const hasGoals = (mData.monthlyGoals || []).some(g => g.done);
-    const hasWeekly = (mData.weeklyTasks || []).some(w => w.done);
+    const hasNotes = !!((mData.notes && mData.notes.trim() !== '') || (mData.goalNote && mData.goalNote.trim() !== ''));
 
     return {
-      hasData: totalChecked > 0 || hasNotes || hasGoals || hasWeekly,
-      count: totalChecked
+      hasData: totalChecked > 0 || hasNotes,
+      count: totalChecked,
+      hasNotes: hasNotes
     };
   }
 
@@ -863,149 +862,199 @@
   }
 
   async function addNewMonth() {
-    const monthName = await showCustomPrompt({
-      title: 'Agregar Nuevo Mes',
-      icon: '➕',
-      message: 'Escribe el nombre del nuevo mes a agregar a tu lista (ej: ENERO, FEBRERO, MARZO...):',
-      defaultValue: '',
-      placeholder: 'Nombre del mes',
-      showEmojis: false
-    });
+    const modalManage = document.getElementById('modalManageMonths');
+    const wasOpen = modalManage && !modalManage.classList.contains('hidden');
+    if (wasOpen) modalManage.classList.add('hidden');
 
-    if (!monthName || monthName.trim() === '') return;
-    const formattedName = monthName.trim().toUpperCase();
-
-    if (appState.monthsList.some(m => m.name === formattedName)) {
-      await showCustomAlert({
-        title: 'Mes ya existente',
-        icon: '⚠️',
-        message: `El mes <strong>${formattedName}</strong> ya se encuentra en tu lista para el año ${appState.currentYear || 2026}.`,
-        buttonText: 'Aceptar'
+    try {
+      const monthName = await showCustomPrompt({
+        title: 'Agregar Nuevo Mes',
+        icon: '➕',
+        message: 'Escribe el nombre del nuevo mes a agregar a tu lista (ej: ENERO, FEBRERO, MARZO...):',
+        defaultValue: '',
+        placeholder: 'Nombre del mes',
+        showEmojis: false
       });
-      return;
+
+      if (!monthName || monthName.trim() === '') return;
+      const formattedName = monthName.trim().toUpperCase();
+
+      if (appState.monthsList.some(m => m.name === formattedName)) {
+        await showCustomAlert({
+          title: 'Mes ya existente',
+          icon: '⚠️',
+          message: `El mes <strong>${formattedName}</strong> ya se encuentra en tu lista para el año ${appState.currentYear || 2026}.`,
+          buttonText: 'Aceptar'
+        });
+        return;
+      }
+
+      const daysPrompt = await showCustomPrompt({
+        title: `Días para ${formattedName}`,
+        icon: '📅',
+        message: 'Número de días en este mes (28, 29, 30 o 31):',
+        defaultValue: '31',
+        placeholder: '31',
+        showEmojis: false
+      });
+
+      let days = parseInt(daysPrompt, 10);
+      if (isNaN(days) || days < 28 || days > 31) days = 30;
+
+      appState.monthsList.push({
+        id: 'm_' + Date.now(),
+        name: formattedName,
+        days: days
+      });
+
+      // Crear entrada en months con datos limpios (sin casillas marcadas)
+      const year = appState.currentYear || 2026;
+      const key = `${formattedName}_${year}`;
+      const matrix = {};
+      DEFAULT_HABITS.forEach((_, i) => {
+        matrix[`habit_${i}`] = new Array(days).fill(false);
+      });
+      appState.months[key] = {
+        habits: [...DEFAULT_HABITS],
+        matrix: matrix,
+        goalNote: '',
+        weeklyTasks: DEFAULT_WEEKLY_TASKS.map(w => ({ ...w, done: false })),
+        monthlyGoals: DEFAULT_MONTHLY_GOALS.map(g => ({ ...g, done: false })),
+        notes: ''
+      };
+
+      currentMonthIndex = appState.monthsList.length - 1;
+      saveState();
+      renderAll();
+      playLevelUpFanfare();
+      launchConfetti();
+    } finally {
+      if (wasOpen) {
+        renderManageMonthsModalList();
+        modalManage.classList.remove('hidden');
+      }
     }
-
-    const daysPrompt = await showCustomPrompt({
-      title: `Días para ${formattedName}`,
-      icon: '📅',
-      message: 'Número de días en este mes (28, 29, 30 o 31):',
-      defaultValue: '31',
-      placeholder: '31',
-      showEmojis: false
-    });
-
-    let days = parseInt(daysPrompt, 10);
-    if (isNaN(days) || days < 28 || days > 31) days = 30;
-
-    appState.monthsList.push({
-      id: 'm_' + Date.now(),
-      name: formattedName,
-      days: days
-    });
-
-    currentMonthIndex = appState.monthsList.length - 1;
-    saveState();
-    renderAll();
-    renderManageMonthsModalList();
-    playLevelUpFanfare();
-    launchConfetti();
   }
 
   async function editMonth(monthIdx) {
-    const monthConfig = appState.monthsList[monthIdx];
-    if (!monthConfig) return;
+    const modalManage = document.getElementById('modalManageMonths');
+    const wasOpen = modalManage && !modalManage.classList.contains('hidden');
+    if (wasOpen) modalManage.classList.add('hidden');
 
-    const newName = await showCustomPrompt({
-      title: `Editar Mes (${monthConfig.name})`,
-      icon: '✏️',
-      message: 'Modifica el nombre del mes:',
-      defaultValue: monthConfig.name,
-      placeholder: 'Nombre del mes',
-      showEmojis: false
-    });
+    try {
+      const monthConfig = appState.monthsList[monthIdx];
+      if (!monthConfig) return;
 
-    if (!newName || newName.trim() === '') return;
-    const formattedName = newName.trim().toUpperCase();
+      const newName = await showCustomPrompt({
+        title: `Editar Mes (${monthConfig.name})`,
+        icon: '✏️',
+        message: 'Modifica el nombre del mes:',
+        defaultValue: monthConfig.name,
+        placeholder: 'Nombre del mes',
+        showEmojis: false
+      });
 
-    const daysPrompt = await showCustomPrompt({
-      title: `Días para ${formattedName}`,
-      icon: '📅',
-      message: 'Número de días en este mes (28, 29, 30 o 31):',
-      defaultValue: monthConfig.days.toString(),
-      placeholder: '31',
-      showEmojis: false
-    });
+      if (!newName || newName.trim() === '') return;
+      const formattedName = newName.trim().toUpperCase();
 
-    let newDays = parseInt(daysPrompt, 10);
-    if (isNaN(newDays) || newDays < 28 || newDays > 31) newDays = monthConfig.days;
+      const daysPrompt = await showCustomPrompt({
+        title: `Días para ${formattedName}`,
+        icon: '📅',
+        message: 'Número de días en este mes (28, 29, 30 o 31):',
+        defaultValue: monthConfig.days.toString(),
+        placeholder: '31',
+        showEmojis: false
+      });
 
-    const year = appState.currentYear || 2026;
-    const oldKey = `${monthConfig.name}_${year}`;
-    const newKey = `${formattedName}_${year}`;
+      let newDays = parseInt(daysPrompt, 10);
+      if (isNaN(newDays) || newDays < 28 || newDays > 31) newDays = monthConfig.days;
 
-    if (oldKey !== newKey && appState.months[oldKey]) {
-      appState.months[newKey] = appState.months[oldKey];
-      delete appState.months[oldKey];
+      const year = appState.currentYear || 2026;
+      const oldKey = `${monthConfig.name}_${year}`;
+      const newKey = `${formattedName}_${year}`;
+
+      if (oldKey !== newKey && appState.months[oldKey]) {
+        appState.months[newKey] = appState.months[oldKey];
+        delete appState.months[oldKey];
+      }
+
+      monthConfig.name = formattedName;
+      monthConfig.days = newDays;
+
+      saveState();
+      renderAll();
+      playArcadeCheckSound();
+    } finally {
+      if (wasOpen) {
+        renderManageMonthsModalList();
+        modalManage.classList.remove('hidden');
+      }
     }
-
-    monthConfig.name = formattedName;
-    monthConfig.days = newDays;
-
-    saveState();
-    renderAll();
-    renderManageMonthsModalList();
-    playArcadeCheckSound();
   }
 
   async function deleteMonth(monthIdx) {
-    if (appState.monthsList.length <= 1) {
-      await showCustomAlert({
-        title: 'Acción no permitida',
-        icon: '⚠️',
-        message: 'Debes mantener al menos un mes activo en la lista.',
-        buttonText: 'Entendido'
-      });
-      return;
-    }
+    const modalManage = document.getElementById('modalManageMonths');
+    const wasOpen = modalManage && !modalManage.classList.contains('hidden');
+    if (wasOpen) modalManage.classList.add('hidden');
 
-    const monthConfig = appState.monthsList[monthIdx];
-    const year = appState.currentYear || 2026;
-    const dataCheck = hasMonthData(monthConfig.name, year);
-
-    let confirmed = false;
-    if (dataCheck.hasData) {
-      confirmed = await showCustomConfirm({
-        title: `⚠️ ¿Eliminar ${monthConfig.name}?`,
-        icon: '🗑️',
-        message: `El mes <strong>${monthConfig.name} (${year})</strong> contiene <strong>${dataCheck.count} casillas completadas</strong> y notas guardadas.<br><br><span style="color: #f87171; font-weight: bold;">Si lo eliminas, perderás definitivamente todos los datos de este mes.</span><br><br>¿Confirmas que deseas eliminarlo?`,
-        confirmText: 'Sí, Eliminar con Datos',
-        cancelText: 'Cancelar',
-        isDanger: true
-      });
-    } else {
-      confirmed = await showCustomConfirm({
-        title: `¿Eliminar ${monthConfig.name}?`,
-        icon: '🗑️',
-        message: `El mes <strong>${monthConfig.name} (${year})</strong> está vacío (no tiene casillas marcadas). ¿Deseas quitarlo de la lista?`,
-        confirmText: 'Eliminar Mes',
-        cancelText: 'Cancelar',
-        isDanger: false
-      });
-    }
-
-    if (confirmed) {
-      const key = `${monthConfig.name}_${year}`;
-      delete appState.months[key];
-      delete appState.months[monthConfig.name];
-      appState.monthsList.splice(monthIdx, 1);
-
-      if (currentMonthIndex >= appState.monthsList.length) {
-        currentMonthIndex = Math.max(0, appState.monthsList.length - 1);
+    try {
+      if (appState.monthsList.length <= 1) {
+        await showCustomAlert({
+          title: 'Acción no permitida',
+          icon: '⚠️',
+          message: 'Debes mantener al menos un mes activo en la lista.',
+          buttonText: 'Entendido'
+        });
+        return;
       }
-      saveState();
-      renderAll();
-      renderManageMonthsModalList();
-      playArcadeCheckSound();
+
+      const monthConfig = appState.monthsList[monthIdx];
+      const year = appState.currentYear || 2026;
+      const dataCheck = hasMonthData(monthConfig.name, year);
+
+      let confirmed = false;
+      if (dataCheck.hasData) {
+        const detailMsg = dataCheck.count > 0 
+          ? `contiene <strong>${dataCheck.count} casillas completadas</strong>${dataCheck.hasNotes ? ' y notas guardadas' : ''}`
+          : `contiene notas guardadas`;
+
+        confirmed = await showCustomConfirm({
+          title: `⚠️ ¿Eliminar ${monthConfig.name}?`,
+          icon: '🗑️',
+          message: `El mes <strong>${monthConfig.name} (${year})</strong> ${detailMsg}.<br><br><span style="color: #f87171; font-weight: bold;">Si lo eliminas, perderás definitivamente todos los datos de este mes.</span><br><br>¿Confirmas que deseas eliminarlo?`,
+          confirmText: 'Sí, Eliminar con Datos',
+          cancelText: 'Cancelar',
+          isDanger: true
+        });
+      } else {
+        confirmed = await showCustomConfirm({
+          title: `¿Eliminar ${monthConfig.name}?`,
+          icon: '🗑️',
+          message: `El mes <strong>${monthConfig.name} (${year})</strong> está vacío (no tiene casillas marcadas ni notas). ¿Deseas quitarlo de la lista?`,
+          confirmText: 'Eliminar Mes',
+          cancelText: 'Cancelar',
+          isDanger: false
+        });
+      }
+
+      if (confirmed) {
+        const key = `${monthConfig.name}_${year}`;
+        delete appState.months[key];
+        delete appState.months[monthConfig.name];
+        appState.monthsList.splice(monthIdx, 1);
+
+        if (currentMonthIndex >= appState.monthsList.length) {
+          currentMonthIndex = Math.max(0, appState.monthsList.length - 1);
+        }
+        saveState();
+        renderAll();
+        playArcadeCheckSound();
+      }
+    } finally {
+      if (wasOpen) {
+        renderManageMonthsModalList();
+        modalManage.classList.remove('hidden');
+      }
     }
   }
 
@@ -1021,6 +1070,13 @@
       const dataCheck = hasMonthData(m.name, appState.currentYear);
       const isCurrent = idx === currentMonthIndex;
 
+      let statusText = '○ Sin datos (Vacío)';
+      if (dataCheck.hasData) {
+        statusText = dataCheck.count > 0 
+          ? `● Con datos (${dataCheck.count} marcas)`
+          : `● Con notas guardadas`;
+      }
+
       const card = document.createElement('div');
       card.className = 'manage-month-card';
       card.innerHTML = `
@@ -1028,7 +1084,7 @@
           <span class="manage-month-name">${escapeHtml(m.name)} ${isCurrent ? '⭐ (Activo)' : ''}</span>
           <span class="manage-month-days-badge">${m.days} días</span>
           <span class="month-data-status ${dataCheck.hasData ? 'status-has-data' : 'status-empty'}">
-            ${dataCheck.hasData ? `● Con datos (${dataCheck.count} marcas)` : '○ Sin datos (Vacío)'}
+            ${statusText}
           </span>
         </div>
         <div class="manage-month-buttons">
