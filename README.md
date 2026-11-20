@@ -61,12 +61,15 @@ Este proyecto fue generado a partir del análisis visual de los fotogramas del v
    - Pestaña de *Instrucciones* con guía rápida emergente.
    - Pestaña de *Seguimiento de Objetivos*.
 
-7. **Persistencia y Exportación Multi-formato:**
+7. **Persistencia, Exportación e Importación Multi-formato:**
    - Todo se almacena automáticamente en el `localStorage` de tu navegador; tus marcas no se pierden al recargar o cerrar.
    - Botón **"💾 Guardar / Exportar"** con ventana modal para elegir el formato de descarga:
-     1. **Excel (.xlsx):** Libro de cálculo nativo con hojas para la matriz mensual, métricas del mes y tareas/objetivos. Funciona 100% offline gracias a `xlsx.full.min.js`.
+     1. **Excel (.xlsx):** Libro de cálculo nativo con hojas para la matriz mensual, métricas del mes y tareas/objetivos con anchos ajustados y colores.
      2. **CSV (.csv):** Archivo universal de valores separados por comas con codificación UTF-8 BOM (`\uFEFF`) para compatibilidad directa e inmediata con Microsoft Excel en español, Google Sheets y LibreOffice.
-     3. **JSON (.json):** Respaldo técnico completo con opción de restaurar o transferir datos mediante el botón de importación.
+     3. **JSON (.json):** Respaldo técnico completo para transferir o resguardar datos.
+   - Botón **"📥 Importar"** (en la cabecera y en el modal):
+     - Soporta archivos **`.xlsx`**, **`.xls`**, **`.csv`** y **`.json`**.
+     - Lee automáticamente la matriz de hábitos, reconoce las casillas completadas y sincroniza las métricas y el progreso de gamificación de inmediato.
 
 ---
 

@@ -46,7 +46,10 @@
           <button class="btn btn-secondary" id="btnSoundToggle" title="Activar/Silenciar efectos de sonido">
             🔊 Sonido
           </button>
-          <button class="btn btn-primary" id="btnExportData" title="Descargar copia de seguridad">
+          <button class="btn btn-secondary" id="btnImportHeader" title="Cargar archivo Excel, CSV o JSON">
+            📥 Importar
+          </button>
+          <button class="btn btn-primary" id="btnExportData" title="Descargar datos en Excel, CSV o JSON">
             💾 Guardar / Exportar
           </button>
         </div>
@@ -378,13 +381,13 @@
             </div>
           </div>
 
-          <!-- Zona de Importación -->
+          <!-- Zona de Importación Universal -->
           <div class="import-section-box">
-            <span class="import-title">¿Deseas restaurar una copia previa?</span>
-            <label class="btn btn-xs btn-outline import-label" for="importJsonFileInput">
-              📥 Importar Archivo (.json)
+            <span class="import-title">¿Tienes un archivo Excel, CSV o JSON previo?</span>
+            <label class="btn btn-xs btn-outline import-label" for="universalFileInput">
+              📥 Importar Archivo (.xlsx, .csv, .json)
             </label>
-            <input type="file" id="importJsonFileInput" accept=".json" style="display: none;" />
+            <input type="file" id="universalFileInput" accept=".xlsx, .xls, .csv, .json" style="display: none;" />
           </div>
 
         </div>
@@ -416,7 +419,8 @@
   <!-- Confetti Canvas for Level Up & 100% Day -->
   <canvas id="confettiCanvas" class="confetti-canvas"></canvas>
 
-  <!-- Biblioteca local para generación estética de Excel (.xlsx) con estilos y colores -->
+  <!-- Bibliotecas locales para Excel (Lectura y Escritura Estética) -->
+  <script src="xlsx.full.min.js"></script>
   <script src="exceljs.min.js"></script>
   <script src="app.js"></script>
 </body>

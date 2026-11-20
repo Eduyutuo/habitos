@@ -1382,36 +1382,205 @@
     playLevelUpFanfare();
   }
 
-  function importFromJSON(file) {
+  // =========================================================================
+  // SISTEMA UNIVERSAL DE IMPORTACIÓN (Excel .xlsx/.xls, CSV .csv, JSON .json)
+  // =========================================================================
+
+  function handleUniversalFileImport(file) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const parsed = JSON.parse(e.target.result);
-        if (parsed && parsed.months) {
-          appState = parsed;
+
+    const fileName = file.name.toLowerCase();
+
+    // 1. Caso JSON (Respaldo Técnico Completo)
+    if (fileName.endsWith('.json')) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && parsed.months) {
+            appState = parsed;
+            saveState();
+            renderAll();
+            launchConfetti();
+            playLevelUpFanfare();
+            await showCustomAlert({
+              title: '¡Importación Exitosa!',
+              icon: '✅',
+              message: 'Tus datos y seguimiento han sido restaurados completamente desde el archivo JSON.',
+              buttonText: 'Continuar'
+            });
+          } else {
+            throw new Error('Estructura de respaldo no válida');
+          }
+        } catch (err) {
+          showCustomAlert({
+            title: 'Error de Importación',
+            icon: '⚠️',
+            message: 'El archivo seleccionado no tiene un formato válido de respaldo JSON.',
+            buttonText: 'Cerrar'
+          });
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+      return;
+    }
+
+    // 2. Caso Excel (.xlsx, .xls) o CSV (.csv)
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          if (typeof XLSX === 'undefined') {
+            throw new Error('La biblioteca de lectura XLSX no está cargada');
+          }
+
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array', codepage: 65001 });
+
+          // Detectar a qué mes pertenece (por nombre de hoja o nombre de archivo)
+          let targetMonthName = MONTHS_CONFIG[currentMonthIndex].name;
+          for (const m of MONTHS_CONFIG) {
+            if (wb.SheetNames.some(s => s.toUpperCase().includes(m.name)) || file.name.toUpperCase().includes(m.name)) {
+              targetMonthName = m.name;
+              break;
+            }
+          }
+
+          const foundMonthIdx = MONTHS_CONFIG.findIndex(m => m.name === targetMonthName);
+          if (foundMonthIdx !== -1) {
+            currentMonthIndex = foundMonthIdx;
+          }
+
+          const monthConfig = MONTHS_CONFIG[currentMonthIndex];
+          const monthData = getCurrentMonthData();
+          const targetDays = monthConfig.days;
+
+          // Seleccionar la hoja que contiene la matriz (la primera hoja o la que contenga el nombre del mes)
+          const matrixSheetName = wb.SheetNames.find(s => s.toUpperCase().includes(targetMonthName)) || wb.SheetNames[0];
+          const sheet = wb.Sheets[matrixSheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+          // Buscar fila de cabecera que contiene "HÁBITO" o "HABITO"
+          let habitRowIdx = -1;
+          let habitColIdx = -1;
+
+          for (let r = 0; r < rows.length; r++) {
+            const row = rows[r];
+            if (!row) continue;
+            for (let c = 0; c < row.length; c++) {
+              const val = String(row[c] || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+              if (val === 'HABITO') {
+                habitRowIdx = r;
+                habitColIdx = c;
+              }
+            }
+          }
+
+          if (habitRowIdx === -1) {
+            throw new Error('No se encontró la columna "HÁBITO" en la hoja.');
+          }
+
+          // Las columnas de días empiezan 2 columnas después de HÁBITO (después de % MES)
+          let daysStartCol = habitColIdx + 2;
+
+          // Extraer hábitos y casillas marcadas
+          const newHabits = [];
+          const newMatrix = {};
+
+          for (let r = habitRowIdx + 1; r < rows.length; r++) {
+            const row = rows[r];
+            if (!row || !row[habitColIdx]) continue;
+            const habitName = String(row[habitColIdx]).trim();
+
+            // Si llegamos a la fila de totales o dashboards, detener extracción de hábitos
+            const normName = habitName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+            if (normName.startsWith('TOTAL') || normName.startsWith('RESUMEN') || habitName === 'Σ') {
+              break;
+            }
+
+            const checks = new Array(targetDays).fill(false);
+            for (let d = 0; d < targetDays; d++) {
+              const val = row[daysStartCol + d];
+              if (val !== undefined && val !== null) {
+                const s = String(val).trim().toLowerCase();
+                if (s === '✓' || s === '✔' || s === '1' || val === 1 || s === 'x' || s === 'si' || s === 'true') {
+                  checks[d] = true;
+                }
+              }
+            }
+
+            const hIdx = newHabits.length;
+            newHabits.push(habitName);
+            newMatrix[`habit_${hIdx}`] = checks;
+          }
+
+          if (newHabits.length === 0) {
+            throw new Error('No se encontraron filas de hábitos válidas para importar.');
+          }
+
+          // Si hay hojas adicionales de Tareas u Objetivos, intentar extraerlas
+          const tasksSheetName = wb.SheetNames.find(s => s.toUpperCase().includes('TAREAS') || s.toUpperCase().includes('METAS'));
+          if (tasksSheetName) {
+            const tRows = XLSX.utils.sheet_to_json(wb.Sheets[tasksSheetName], { header: 1 });
+            const importedWeekly = [];
+            const importedGoals = [];
+
+            for (let r = 1; r < tRows.length; r++) {
+              const row = tRows[r];
+              if (!row || row.length < 3) continue;
+              const type = String(row[0] || '').toLowerCase();
+              const scope = String(row[1] || '');
+              const desc = String(row[2] || '').trim();
+              const isDone = String(row[3] || '').toUpperCase().includes('COMPLET') || String(row[3] || '').includes('✓');
+
+              if (type.includes('semanal') || scope.includes('Semana')) {
+                const weekNum = parseInt(scope.replace(/\D/g, ''), 10) || 1;
+                importedWeekly.push({ id: 'w_' + Date.now() + '_' + r, title: desc, done: isDone, week: weekNum });
+              } else if (type.includes('mensual') || type.includes('objetivo')) {
+                importedGoals.push({ id: 'g_' + Date.now() + '_' + r, title: desc, done: isDone });
+              }
+            }
+
+            if (importedWeekly.length > 0) monthData.weeklyTasks = importedWeekly;
+            if (importedGoals.length > 0) monthData.monthlyGoals = importedGoals;
+          }
+
+          // Asignar los nuevos datos al mes correspondiente
+          monthData.habits = newHabits;
+          monthData.matrix = newMatrix;
+
           saveState();
           renderAll();
           launchConfetti();
+          playLevelUpFanfare();
+
           await showCustomAlert({
             title: '¡Importación Exitosa!',
-            icon: '✅',
-            message: 'Tus datos y seguimiento han sido restaurados correctamente.',
-            buttonText: 'Continuar'
+            icon: '📊',
+            message: `Se importaron correctamente <strong>${newHabits.length} hábitos</strong> y sus marcas para el mes de <strong>${targetMonthName}</strong> desde tu archivo.`,
+            buttonText: '¡Genial!'
           });
-        } else {
-          throw new Error('Estructura de respaldo no válida');
+
+        } catch (err) {
+          console.error('Error al importar Excel/CSV:', err);
+          showCustomAlert({
+            title: 'Error de Importación',
+            icon: '⚠️',
+            message: `No se pudo procesar el archivo: ${err.message || 'Formato no reconocido'}. Asegúrate de que sea un archivo de hábitos exportado por la app o con columnas válidas.`,
+            buttonText: 'Cerrar'
+          });
         }
-      } catch (err) {
-        showCustomAlert({
-          title: 'Error de Importación',
-          icon: '⚠️',
-          message: 'El archivo seleccionado no tiene un formato válido de respaldo JSON.',
-          buttonText: 'Cerrar'
-        });
-      }
-    };
-    reader.readAsText(file);
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    showCustomAlert({
+      title: 'Formato no soportado',
+      icon: '⚠️',
+      message: 'Por favor selecciona un archivo con extensión <strong>.xlsx, .xls, .csv o .json</strong>.',
+      buttonText: 'Entendido'
+    });
   }
 
   // =========================================================================
@@ -1573,12 +1742,20 @@
 
     // 6. Exportar e Importar Datos (Modal con Excel, CSV y JSON)
     const btnExport = document.getElementById('btnExportData');
+    const btnImportHeader = document.getElementById('btnImportHeader');
     const modalExport = document.getElementById('modalExport');
     const btnCloseExport = document.getElementById('btnCloseExport');
     const btnExportExcel = document.getElementById('btnExportExcel');
     const btnExportCSV = document.getElementById('btnExportCSV');
     const btnExportJSON = document.getElementById('btnExportJSON');
-    const fileInputImport = document.getElementById('importJsonFileInput');
+    const fileInputImport = document.getElementById('universalFileInput') || document.getElementById('importJsonFileInput');
+
+    // Botón Importar directo en la cabecera
+    if (btnImportHeader && fileInputImport) {
+      btnImportHeader.addEventListener('click', () => {
+        fileInputImport.click();
+      });
+    }
 
     if (btnExport && modalExport) {
       btnExport.addEventListener('click', () => {
@@ -1621,7 +1798,7 @@
         const file = e.target.files && e.target.files[0];
         if (file) {
           if (modalExport) modalExport.classList.add('hidden');
-          importFromJSON(file);
+          handleUniversalFileImport(file);
         }
         fileInputImport.value = '';
       });
